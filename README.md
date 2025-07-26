@@ -11,7 +11,7 @@ Tools for handling and converting PSP `.pmf` movie files, including enhanced aut
 
 ## Download
 
-You can find a prebuilt package in the releases section.
+You can [Download](https://github.com/OAleex/pmftools-plus/releases/tag/1.0) a prebuilt package in the releases section.
 
 ## Usage
 
