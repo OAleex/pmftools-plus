@@ -1,4 +1,4 @@
-﻿using CommandLine;
+using CommandLine;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -56,15 +56,17 @@ namespace AutoUscV2
         {
             get
             {
-                if (_executable != null)
-                    return _executable;
-
-                string basePath = DefaultExecutablePath;
-
-
-                if (!string.IsNullOrEmpty(_executable) && _executable != DefaultExecutablePath)
+                if (!string.IsNullOrEmpty(_executable) && File.Exists(_executable))
                 {
                     return _executable;
+                }
+
+                string basePath = _executable ?? DefaultExecutablePath;
+
+
+                if (!Path.IsPathRooted(basePath))
+                {
+                    basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, basePath);
                 }
 
                 string renamedPath = Path.Combine(basePath, "UmdStream.exe");
@@ -81,8 +83,7 @@ namespace AutoUscV2
                     return _executable;
                 }
 
-                _executable = renamedPath;
-                return _executable;
+                throw new FileNotFoundException($"No UMD Stream Composer executable found in: {basePath}");
             }
             set
             {
