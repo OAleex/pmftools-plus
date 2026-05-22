@@ -1,91 +1,127 @@
-# pmftools plus
+# pmftools-plus
 
-Tools for handling and converting PSP `.pmf` movie files, including enhanced automation for UMD Stream Composer with customizable bitrate settings.
+Tools for handling and converting PSP `.pmf` movie files.
 
 ## Tools Included
 
-* `psmfdump`: Extract `.264` and `.oma` streams from `.pmf` files.
-* `Mps2Pmf`: Convert `.mps` files to `.pmf` format.
-* `AutoUscV2`: Automates UMD Stream Composer with bitrate customization.
-* `get_duration`: Python-based duration detection tool.
+* `psmfdump` - Extract `.264` and `.oma` streams from `.pmf` files
+* `oMPSComposer` - Encodes video + audio and muxes into `.mps`
+* `Mps2Pmf` - Converts `.mps` files to `.pmf` format
+* `get_duration` - Duration detection used internally by the pipeline
+* `ffmpeg` - Used for video conversion and encoding in the pipeline
+
+## External Tool Requirement
+
+The only external dependency you need to provide yourself is `at3tool.exe` for PSP.
+
+`at3tool.exe` is not distributed with this project.
+You must obtain it on your own and place it in the `tools` folder of the release package.
+
+## Legal Notice
+
+pmftools-plus does not include, distribute, or endorse distribution of copyrighted game files, ISOs, ROMs, firmware, Sony tools, or Sony assets.
+
+This project is intended for research, preservation, translation, accessibility, and modding workflows using files legally obtained by the user. Users are responsible for complying with the laws and licenses that apply to their own game copies and extracted media.
+
+pmftools-plus is not affiliated with, endorsed by, or sponsored by Sony Interactive Entertainment.
+
+See `NOTICE.txt` for the release notice.
 
 ## Download
 
-You can [Download](https://github.com/OAleex/pmftools-plus/releases/tag/1.0) a prebuilt package in the releases section.
+You can [Download](https://github.com/OAleex/pmftools-plus/releases) a prebuilt package in the releases section.
 
 ## Usage
 
-### 🔄 Convert PMF to MOV
+The instructions below refer to the prebuilt release package.
+
+### Convert PMF to Video
 
 ```
-Step 1: Place your `.pmf` files into the `input/pmf` folder  
-Step 2: Run `1 - Pmf2Mov.bat`  
-Step 3: The converted `.mov` files will appear in `output/mov`
+1. Place your PSP movie files into input/pmf/
+2. Run "pmftools-plus.bat"
+3. Choose "A. PMF --> VIDEO"
+4. Find the converted .mov files in output/video/
 ```
 
-This uses `psmfdump` to extract audio/video and `ffmpeg` to convert to MOV format.
-
-### 🎬 Convert MOV to PMF (via AVI + AutoUsc)
+### Convert Video to PMF
 
 ```
-Step 1: Place your edited `.mov` files into `input/mov_edited`  
-Step 2: Run `2 - Mov2Pmf.bat`  
-Step 3: Converted `.pmf` files will appear in `output/pmf`
+1. Place your edited .mov, .avi, or .mp4 files into input/video_edited/
+2. Run "pmftools-plus.bat"
+3. Choose "B. VIDEO --> PMF"
+4. Find the converted PSP movie files in output/pmf/
 ```
 
-You can edit the default bitrate values directly in the batch file:
-```batch
-set AVERAGEBITRATE=1000
-set MAXBITRATE=2000
+Encoding settings can be changed from the launcher:
+
+1. Run `pmftools-plus.bat`
+2. Choose `S. Encoding Settings`
+3. Set video bitrate, audio channel mode, ATRAC bitrate, Source Bitrate Match, and advanced encoder options.
+    `Source Bitrate Match` can be enabled from Encoding Settings. When enabled, videos rebuilt from an extracted PMF use source metadata from `worker.ini` when available:
+    - original video average bitrate
+    - original ATRAC3plus bitrate
+    - original mono/stereo channel mode.
+    This helps the rebuilt movie stay closer to the original size and audio layout.
+
+Advanced settings:
+
+- Encode Mode: `1pass` is faster, `2pass` gives better bitrate control
+- IDR Interval: recommended default is `2000 ms`
+- M-Frames: recommended default is `1`
+
+### Required Build Tools
+
+- Windows x64
+- .NET SDK with support for the project targets below
+- .NET Framework 4.7.2 Developer Pack / targeting pack
+- Visual Studio or Build Tools with MSBuild, C++ tools, and Windows 10 SDK
+- Python 3 with `pip`
+
+### Source Components
+
+| Component | Source path | Language/runtime |
+| --- | --- | --- |
+| `oMPSComposer.exe` | `src/oMPSComposer` | C# / .NET Framework 4.7.2 |
+| `psmfdump.exe` | `src/psmfdump` | C# / .NET 7.0 |
+| `Mps2Pmf.exe` | `src/Mps2Pmf` | C++ / MSVC |
+| `get_duration.exe` | `src/get_duration` | Python |
+| `pmftools-plus.bat` | `src/scripts` | Windows batch |
+
+The `Mps2Pmf` build script currently passes `PlatformToolset=v145` to MSBuild.
+
+### Python Requirements
+
+`get_duration` needs:
+
+```txt
+pymediainfo
+pyinstaller
 ```
 
-## Requirements
+## Major Update: No UMD Stream Composer Required
 
-* `ffmpeg.exe`
-* `psmfdump.exe`
-* `AutoUscV2.exe` (custom wrapper for UMD Stream Composer)
-* `Mps2Pmf.exe`
-* `get_duration.exe` (Python-based duration detection tool)
+The original [pmftools by LITTOMA](https://github.com/TeamPBCN/pmftools/) depended on Sony **UMD Stream Composer** to mux video and audio into `.mps` files. That made the PMF rebuild workflow hard to automate, tied to an old GUI tool, and difficult to preserve long-term.
 
-### UMD Stream Composer Setup
+**pmftools-plus** now replaces the UMD Stream Composer step with `oMPSComposer`.
 
-Before using this tool, you must search and download "UMD Stream Composer" from the Internet and place the program folder in the `tools` directory. The structure should be:
+- Extracts PMF/PSMF movies into editable `.mov` files
+- Accepts edited `.mov`, `.avi`, or `.mp4` files
+- Re-encodes video to PSP-compatible H.264 via FFmpeg
+- Encodes audio to ATRAC3plus via `at3tool.exe`
+- Handles multiple audio tracks automatically through the launcher
+- Muxes video and one or more audio tracks into a valid `.mps` through `oMPSComposer`
+- Converts the generated `.mps` back into PMF/PSMF output
+- Preserves original extension metadata and can match source video/audio bitrate settings
 
-```
-tools/
-├── Umd Stream Composer/
-│   └── bin/
-│       ├── UmdStream.exe (renamed - preferred)
-│       ├── UmdStreamComposer.exe (original - fallback)
-│       └── (other UMD Stream Composer files)
-├── AutoUscV2.exe
-└── (other tools)
-```
-
-Alternatively, you can use the `-x|--executable` option to specify a custom location for the UmdStreamComposer.exe.
-
-**Important notes:**
-- You MUST run UMD Stream Composer manually at least once and ensure it works properly on your computer
-- UMD Stream Composer version 1.5 RC4 is proven to work with this tool
-- If both executables exist, the tool automatically prioritizes `UmdStream.exe` (renamed version) over `UmdStreamComposer.exe` (original)
-
-## Why This Modified Version?
-
-The original pmftools by LITTOMA converts PMF files to MP4 format, which is good for general use but doesn't preserve 100% quality and fidelity for those seeking maximum video quality.
-
-### Problems with UMD Stream Composer:
-- **DirectDraw device error**: The program shows a "DirectDraw device does not support overlays" dialog that needs to be dismissed
-- **File naming issues**: The program often needs to be renamed from `UmdStreamComposer.exe` to `UmdStream.exe` for proper operation (the tool automatically detects both but prioritizes the renamed version)
-- **Manifest cleanup**: Sometimes needs manifest file deletion for clean execution
-
-### Improvements in This Version:
-- **MOV format support**: Preserves higher quality compared to MP4 conversion
-- **Automated UMD Stream Composer handling**: Deals with DirectDraw dialogs and file management automatically
-- **Custom get_duration tool**: Python-based duration detection to overcome various compatibility issues
+The `oMPSComposer` muxer was validated against `.mps` files generated by UMD Stream Composer, and the rebuilt PMF output has been tested on real PSP hardware.
 
 ## Credits
 
-**Original project**: [TeamPBCN/pmftools](https://github.com/TeamPBCN/pmftools/) by **LITTOMA**  
-**Verified by**: **吉🐣 PRODUCTION**
-
-MIT License – see LICENSE for details.
+* **PMFtools-plus** - Created by Alex "OAleex" Felix
+* **Original project lineage** - Based on [TeamPBCN/pmftools](https://github.com/TeamPBCN/pmftools) by LITTOMA
+* **psmfdump** - Included from the TeamPBCN/pmftools lineage by LITTOMA; based on [VGMToolbox](https://sourceforge.net/projects/vgmtoolbox/files/vgmtoolbox/)
+* **Mps2Pmf** - Included from the TeamPBCN/pmftools lineage by LITTOMA; based on piccahoe's PMF Creater
+* **oMPSComposer** - Created by Alex "OAleex" Felix
+* **get_duration** - Created by Alex "OAleex" Felix
+* **FFmpeg** - Thanks to the [FFmpeg project](https://github.com/ffmpeg/ffmpeg) for essential video encoding support

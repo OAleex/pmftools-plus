@@ -443,7 +443,7 @@ namespace VGMToolbox.format
                         catch (Exception _ex)
                         {
                             this.closeAllWriters(streamOutputWriters);
-                            throw new Exception(String.Format("Error parsing file at offset {0), '{1}'", currentOffset.ToString("X8"), _ex.Message), _ex);
+                            throw new Exception(String.Format("Error parsing file at offset {0}, '{1}'", currentOffset.ToString("X8"), _ex.Message), _ex);
                         }
                     } // while (currentOffset < fileSize)
                 }

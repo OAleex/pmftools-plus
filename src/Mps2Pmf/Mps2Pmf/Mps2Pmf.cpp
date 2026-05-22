@@ -92,11 +92,11 @@ int convert(std::string *pmfPath, std::string *mpsPath, int mins, int secs, bool
         HeaderFile[161] = 0x00;
     }
 
-    int totaltime = (mins * 60) + secs;
+    long totaltime = (mins * 60L) + secs;
 
-    totaltime *= 60;
-    totaltime *= 30;
-    totaltime *= 60;
+    // PMF duration fields use the MPEG 90 kHz clock, matching the values
+    // found in working Sony-authored headers.
+    totaltime *= 90000L;
 
     long tmp = totaltime >> 24;
     HeaderFile[92] = tmp;
