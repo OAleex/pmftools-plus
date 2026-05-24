@@ -13,16 +13,19 @@ namespace oMPSComposer
         {
             try
             {
-                if (!CheckDependencies())
-                    return 1;
-
                 if (args.Length == 0)
                 {
+                    if (!CheckDependencies(true))
+                        return 1;
+
                     PrintUsage();
                     return 0;
                 }
 
                 ParsedArgs parsed = Parse(args);
+
+                if (!CheckDependencies(parsed.AudioFiles.Count > 0))
+                    return 1;
 
                 Build(parsed.Video, parsed.AudioFiles, parsed.Output, parsed.AudioBitrate, parsed.Opts);
                 return 0;
@@ -34,12 +37,12 @@ namespace oMPSComposer
             }
         }
 
-        private static bool CheckDependencies()
+        private static bool CheckDependencies(bool needAt3)
         {
             string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly()?.Location ?? ".");
 
             bool ffmpeg = FindTool(exeDir, "ffmpeg.exe");
-            bool at3 = FindTool(exeDir, "at3tool.exe");
+            bool at3 = !needAt3 || FindTool(exeDir, "at3tool.exe");
 
             if (ffmpeg && at3) return true;
 
@@ -117,6 +120,9 @@ namespace oMPSComposer
                         break;
 
                     case 1:
+                        if (arg == "-")
+                            break;
+
                         foreach (string f in arg.Split(','))
                         {
                             string t = f.Trim();
@@ -135,9 +141,6 @@ namespace oMPSComposer
 
             if (string.IsNullOrWhiteSpace(parsed.Video))
                 throw new ArgumentException("Missing argument: video\n" + UsageLine());
-
-            if (parsed.AudioFiles.Count == 0)
-                throw new ArgumentException("Missing argument: at least one audio file\n" + UsageLine());
 
             if (string.IsNullOrWhiteSpace(parsed.Output))
                 throw new ArgumentException("Missing argument: output\n" + UsageLine());
@@ -199,7 +202,7 @@ namespace oMPSComposer
             Console.WriteLine("  oMPSComposer v1.0  |  by Alex \"OAleex\" Felix");
             Console.WriteLine();
             Console.WriteLine("  Video   " + Path.GetFileName(videoPath));
-            Console.WriteLine(audioPaths.Count == 1 ? "  Audio   " + Path.GetFileName(audioPaths[0]) : "  Audio   " + string.Join(", ", audioPaths.ConvertAll(Path.GetFileName)));
+            Console.WriteLine(audioPaths.Count == 0 ? "  Audio   none" : audioPaths.Count == 1 ? "  Audio   " + Path.GetFileName(audioPaths[0]) : "  Audio   " + string.Join(", ", audioPaths.ConvertAll(Path.GetFileName)));
             Console.WriteLine("  Output  " + Path.GetFileName(outputPath));
             Console.WriteLine("  Mode    " + ModeLabel(opts.Mode) + $"  |  avg {opts.AvgBitrate} kbps  max {opts.MaxBitrate} kbps");
             Console.WriteLine();
@@ -213,7 +216,7 @@ namespace oMPSComposer
             string h264Path = Path.Combine(tempDir, tempStem + ".tmp.264");
             string[] atracPaths = new string[audioPaths.Count];
             bool twoPass = opts.Mode == EncodeMode.TwoPassVbr;
-            int baseStep = 3;
+            int baseStep = audioPaths.Count == 0 ? 2 : 3;
             int step = 0;
 
             try
@@ -238,13 +241,16 @@ namespace oMPSComposer
                     PrintStepDone();
                 }
 
-                PrintStepStart(++step, baseStep, "Encoding audio");
-                for (int t = 0; t < audioPaths.Count; t++)
+                if (audioPaths.Count > 0)
                 {
-                    atracPaths[t] = Path.Combine(tempDir, tempStem + $".audio{t}.tmp.atx");
-                    AudioEncoder.Encode(audioPaths[t], atracPaths[t], audioBitrate);
+                    PrintStepStart(++step, baseStep, "Encoding audio");
+                    for (int t = 0; t < audioPaths.Count; t++)
+                    {
+                        atracPaths[t] = Path.Combine(tempDir, tempStem + $".audio{t}.tmp.atx");
+                        AudioEncoder.Encode(audioPaths[t], atracPaths[t], audioBitrate);
+                    }
+                    PrintStepDone();
                 }
-                PrintStepDone();
 
                 PrintStepStart(++step, baseStep, "Muxing");
 
@@ -331,7 +337,7 @@ namespace oMPSComposer
                 File.Delete(esiaPath);
         }
 
-        private static string UsageLine() => "Usage: oMPSComposer <video.mov|video.avi|video.mp4> <audio0.wav[,audio1.wav,...]> <output.mps> [options]";
+        private static string UsageLine() => "Usage: oMPSComposer <video.mov|video.avi|video.mp4> <audio0.wav[,audio1.wav,...]|-> <output.mps> [options]";
 
         private static string ModeLabel(EncodeMode m) => m == EncodeMode.TwoPassVbr ? "2-pass VBR" : "1-pass VBR";
 
@@ -341,7 +347,7 @@ namespace oMPSComposer
             Console.WriteLine();
             Console.WriteLine("  oMPSComposer v1.0  |  by Alex \"OAleex\" Felix");
             Console.WriteLine();
-            Console.WriteLine("  usage: oMPSComposer <video.mov|video.avi|video.mp4> <audio.wav[,audio2.wav,...]> <output.mps> [options]");
+            Console.WriteLine("  usage: oMPSComposer <video.mov|video.avi|video.mp4> <audio.wav[,audio2.wav,...]|-> <output.mps> [options]");
             Console.WriteLine();
             Console.WriteLine("  Bitrate");
             Console.WriteLine($"    --avg-bitrate <n>      video average kbps     (default: 1000, must be < max)");

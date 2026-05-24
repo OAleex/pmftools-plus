@@ -70,8 +70,8 @@ namespace oMPSComposer
 
         public static void Mux(string h264Path, AtracReader[] tracks, string outputPath)
         {
-            if (tracks == null || tracks.Length == 0)
-                throw new ArgumentException("At least one audio track is required.");
+            if (tracks == null)
+                tracks = new AtracReader[0];
             if (tracks.Length > MaxAudioTracks)
                 throw new ArgumentException($"Maximum {MaxAudioTracks} audio tracks supported; got {tracks.Length}.");
 

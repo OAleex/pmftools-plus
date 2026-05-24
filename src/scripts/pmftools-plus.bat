@@ -516,7 +516,7 @@ for /L %%i in (0,1,99) do (
     if exist "obj\%~n1.%%i.at3" call :add_audio "obj\%~n1.%%i.at3"
 )
 
-if !AUDIO_TRACKS! GTR 0 if exist "obj\%~n1.264" (
+if exist "obj\%~n1.264" (
     if exist "output\video\%~n1.mov" del "output\video\%~n1.mov" >nul 2>&1
     echo   Encoding MOV...
     %FF% %FFFLAGS% !FFMPEG_INPUTS! !FFMPEG_MAPS! -s 480x272 -c:v prores_ks -profile:v 3 "output\video\%~n1.mov"
@@ -829,15 +829,17 @@ for /f "delims=" %%a in ('%FF% -hide_banner -i "%~1" 2^>^&1 ^| findstr /i /c:"Au
     set /a AUDIO_TRACKS+=1
 )
 
-if !AUDIO_TRACKS! EQU 0 ( echo ERROR: No audio in %~nx1 & exit /b )
-
-for /L %%i in (0,1,15) do (
-    %FF% %FFFLAGS% -i "%~1" -map 0:a:%%i -ar 44100 -ac !ENC_AUDIO_CHANNELS! -c:a pcm_s16le "!JOBDIR!\audio%%i.wav" >nul 2>&1
-    if exist "!JOBDIR!\audio%%i.wav" (
-        if "!AUDIO_WAVS!"=="" (
-            set "AUDIO_WAVS=!JOBDIR!\audio%%i.wav"
-        ) else (
-            set "AUDIO_WAVS=!AUDIO_WAVS!,!JOBDIR!\audio%%i.wav"
+if !AUDIO_TRACKS! EQU 0 (
+    set "AUDIO_WAVS=-"
+) else (
+    for /L %%i in (0,1,15) do (
+        %FF% %FFFLAGS% -i "%~1" -map 0:a:%%i -ar 44100 -ac !ENC_AUDIO_CHANNELS! -c:a pcm_s16le "!JOBDIR!\audio%%i.wav" >nul 2>&1
+        if exist "!JOBDIR!\audio%%i.wav" (
+            if "!AUDIO_WAVS!"=="" (
+                set "AUDIO_WAVS=!JOBDIR!\audio%%i.wav"
+            ) else (
+                set "AUDIO_WAVS=!AUDIO_WAVS!,!JOBDIR!\audio%%i.wav"
+            )
         )
     )
 )
