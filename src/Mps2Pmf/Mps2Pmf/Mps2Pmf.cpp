@@ -3,6 +3,8 @@
 #include <string.h>
 #include <iostream>
 #include <fstream>
+#include <iterator>
+#include <vector>
 
 #include "cxxopts.hpp"
 
@@ -11,11 +13,19 @@
 using namespace std;
 
 #define READ_BUF_SIZE 1024 * 1024 * 4
+#define PMF_VIDEO_START_TICKS 90000L
+#define PMF_FRAME_DURATION_TICKS 3003L
 
 int IsMpsFile(std::string *filePath);
+int HasAudioPes(std::string *filePath);
+void ConfigureVideoOnlyHeader();
+long InferVideoDurationTicks(std::string *filePath);
+int CountVideoFrames(std::string *filePath);
+int CountH264Frames(std::vector<unsigned char> *payload);
 int WriteMpsContent(std::string *mpsPath, std::string *pmfPath);
 int WritePmfHeader(std::string *pmfPath);
 int SetFileSizeInHeader(std::string *mpsPath);
+void SetDurationInHeader(long durationTicks);
 int FileCombine(std::string *mpsPath, std::string *pmfPath);
 long GetFileSize(std::string *fileName);
 int convert(std::string *pmfPath, std::string *mpsPath, int mins, int secs, bool makeIcon);
@@ -92,27 +102,21 @@ int convert(std::string *pmfPath, std::string *mpsPath, int mins, int secs, bool
         HeaderFile[161] = 0x00;
     }
 
-    long totaltime = (mins * 60L) + secs;
+    int hasAudio = HasAudioPes(mpsPath);
+    long totalTime = ((mins * 60L) + secs) * 90000L;
 
-    // PMF duration fields use the MPEG 90 kHz clock, matching the values
-    // found in working Sony-authored headers.
-    totaltime *= 90000L;
+    if (hasAudio == 0)
+    {
+        ConfigureVideoOnlyHeader();
 
-    long tmp = totaltime >> 24;
-    HeaderFile[92] = tmp;
-    HeaderFile[118] = tmp;
+        long videoOnlyDuration = InferVideoDurationTicks(mpsPath);
+        if (videoOnlyDuration > 0)
+        {
+            totalTime = videoOnlyDuration;
+        }
+    }
 
-    tmp = totaltime >> 16;
-    HeaderFile[93] = tmp;
-    HeaderFile[119] = tmp;
-
-    tmp = (totaltime >> 8) & 0xFF;
-    HeaderFile[94] = tmp;
-    HeaderFile[120] = tmp;
-
-    tmp = totaltime & 0xFF;
-    HeaderFile[95] = tmp;
-    HeaderFile[121] = tmp;
+    SetDurationInHeader(totalTime);
 
     if (pmfPath->empty())
     {
@@ -128,6 +132,51 @@ int convert(std::string *pmfPath, std::string *mpsPath, int mins, int secs, bool
     }
 
     return 0;
+}
+
+void ConfigureVideoOnlyHeader()
+{
+    HeaderFile[83] = 0x3E;
+    HeaderFile[104] = 0x01;
+    HeaderFile[109] = 0x24;
+    HeaderFile[127] = 0x12;
+    HeaderFile[129] = 0x01;
+
+    for (int i = 146; i <= 149; i++)
+    {
+        HeaderFile[i] = 0x00;
+    }
+
+    HeaderFile[160] = 0x00;
+    HeaderFile[161] = 0x00;
+}
+
+void SetDurationInHeader(long durationTicks)
+{
+    long tmp = durationTicks >> 24;
+    HeaderFile[92] = tmp;
+    HeaderFile[118] = tmp;
+
+    tmp = durationTicks >> 16;
+    HeaderFile[93] = tmp;
+    HeaderFile[119] = tmp;
+
+    tmp = (durationTicks >> 8) & 0xFF;
+    HeaderFile[94] = tmp;
+    HeaderFile[120] = tmp;
+
+    tmp = durationTicks & 0xFF;
+    HeaderFile[95] = tmp;
+    HeaderFile[121] = tmp;
+}
+
+long InferVideoDurationTicks(std::string *filePath)
+{
+    int frames = CountVideoFrames(filePath);
+    if (frames <= 0)
+        return -1;
+
+    return PMF_VIDEO_START_TICKS + (frames * PMF_FRAME_DURATION_TICKS);
 }
 
 long GetFileSize(std::string *fileName)
@@ -227,6 +276,100 @@ int WriteMpsContent(std::string *mpsPath, std::string *pmfPath)
     pmf.close();
     delete buf;
     return 0;
+}
+
+int HasAudioPes(std::string *filePath)
+{
+    ifstream in(*filePath, ios::binary);
+    if (!in.is_open())
+    {
+        return -1;
+    }
+
+    unsigned char prev[3] = {0, 0, 0};
+    unsigned char current;
+    while (in.read(reinterpret_cast<char *>(&current), 1))
+    {
+        if (prev[0] == 0x00 && prev[1] == 0x00 && prev[2] == 0x01 && current == 0xBD)
+        {
+            in.close();
+            return 1;
+        }
+
+        prev[0] = prev[1];
+        prev[1] = prev[2];
+        prev[2] = current;
+    }
+
+    in.close();
+    return 0;
+}
+
+int CountVideoFrames(std::string *filePath)
+{
+    ifstream in(*filePath, ios::binary);
+    if (!in.is_open())
+    {
+        return -1;
+    }
+
+    std::vector<unsigned char> file((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+
+    std::vector<unsigned char> video;
+    for (size_t i = 0; i + 9 < file.size();)
+    {
+        if (file[i] == 0x00 && file[i + 1] == 0x00 && file[i + 2] == 0x01 && file[i + 3] == 0xE0)
+        {
+            int packetLength = (file[i + 4] << 8) | file[i + 5];
+            size_t packetEnd = packetLength > 0 ? i + 6 + packetLength : file.size();
+            if (packetEnd > file.size())
+                packetEnd = file.size();
+
+            size_t payloadStart = i + 9 + file[i + 8];
+            if (payloadStart < packetEnd)
+                video.insert(video.end(), file.begin() + payloadStart, file.begin() + packetEnd);
+
+            i = packetEnd;
+            continue;
+        }
+
+        i++;
+    }
+
+    return CountH264Frames(&video);
+}
+
+int CountH264Frames(std::vector<unsigned char> *payload)
+{
+    int frames = 0;
+    for (size_t i = 0; i + 4 < payload->size(); i++)
+    {
+        size_t nalOffset = 0;
+        if ((*payload)[i] == 0x00 && (*payload)[i + 1] == 0x00 && (*payload)[i + 2] == 0x01)
+        {
+            nalOffset = i + 3;
+            i += 2;
+        }
+        else if ((*payload)[i] == 0x00 && (*payload)[i + 1] == 0x00 && (*payload)[i + 2] == 0x00 && (*payload)[i + 3] == 0x01)
+        {
+            nalOffset = i + 4;
+            i += 3;
+        }
+        else
+        {
+            continue;
+        }
+
+        if (nalOffset >= payload->size())
+            continue;
+
+        unsigned char nalType = (*payload)[nalOffset] & 0x1F;
+        if (nalType == 1 || nalType == 5)
+            frames++;
+    }
+
+    return frames;
 }
 
 int IsMpsFile(std::string *filePath)

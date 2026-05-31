@@ -294,7 +294,7 @@ namespace oMPSComposer
 
             if (bfSegments.Count > 0)
             {
-                byte[] sysHdr = BuildSystemHeader();
+                byte[] sysHdr = BuildSystemHeader(numTracks > 0);
                 byte[] bf0 = BuildBfPes(bfSegments[0]);
                 int fixed0 = 14 + sysHdr.Length + bf0.Length + (6 + 3 + 13);
                 int tsStep0 = TimestampStepForSegment(0, bfFrameStarts.Count, initialStartupMode);
@@ -483,7 +483,7 @@ namespace oMPSComposer
                         }
                     }
 
-                    byte[] sysHdr2 = BuildSystemHeader();
+                    byte[] sysHdr2 = BuildSystemHeader(numTracks > 0);
                     byte[] bf = BuildBfPes(bfSegments[bfIndex]);
                     nextBfThreshold = bfIndex < bfByteBounds.Count ? bfByteBounds[bfIndex] : totalVideoBytes + 1;
                     bfIndex++;
@@ -1388,12 +1388,11 @@ namespace oMPSComposer
             return h;
         }
 
-        private static byte[] BuildSystemHeader()
+        private static byte[] BuildSystemHeader(bool hasAudio)
         {
-            byte[] payload =
-            {
-                0x80, 0xC3, 0x51, 0x80, 0xF0, 0x7F, 0xB9, 0xE0, 0xFB, 0xBD, 0xE0, 0x08
-            };
+            byte[] payload = hasAudio
+                ? new byte[] { 0x80, 0xC3, 0x51, 0x80, 0xF0, 0x7F, 0xB9, 0xE0, 0xFB, 0xBD, 0xE0, 0x08 }
+                : new byte[] { 0x80, 0xC3, 0x51, 0x40, 0xF0, 0x7F, 0xB9, 0xE1, 0xEF, 0xBD, 0xE0, 0x04 };
 
             byte[] r = new byte[6 + payload.Length];
             r[0] = 0x00; r[1] = 0x00; r[2] = 0x01; r[3] = SidSystem;
